@@ -1,0 +1,17 @@
+.idea
+out/
+*.class
+*.log
+*.jar
+*.war
+*.nar
+*.ear
+*.zip
+*.tar.gz
+*.rar
+hs_err_pid*
+replay_pid*
+.gradle
+**/build/
+!src/**/build/
+.gradletasknamecache
