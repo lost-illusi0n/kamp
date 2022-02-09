@@ -16,13 +16,6 @@ import kotlinx.serialization.json.JsonObject
 private const val WAMP_MAGIC: Byte = 0x7F
 private const val MAX_LENGTH: UByte = 15u
 
-private val HANDSHAKE = byteArrayOf(
-    WAMP_MAGIC,
-    ((MAX_LENGTH.toInt() shl 4) or JSON_SERIALIZER_TYPE.toInt()).toByte(),
-    0,
-    0
-)
-
 public class DefaultSession(public val data: DefaultSessionData) : Session {
     public val scope: CoroutineScope = CoroutineScope(SupervisorJob() + CoroutineName("kamp-session"))
 
@@ -89,10 +82,11 @@ public class DefaultSession(public val data: DefaultSessionData) : Session {
     }
 
     private suspend fun handshake(incoming: ByteReadChannel) {
-        outgoing.writeFully(HANDSHAKE, 0, HANDSHAKE.size)
-        outgoing.flush()
-
-        println("sent client handshake: ${HANDSHAKE.joinToString(" ") { it.toUByte().toString(2).padStart(8, '0') } }")
+        // TODO: abstract socket
+//        outgoing.writeFully(HANDSHAKE, 0, HANDSHAKE.size)
+//        outgoing.flush()
+//
+//        println("sent client handshake: ${HANDSHAKE.joinToString(" ") { it.toUByte().toString(2).padStart(8, '0') } }")
 
         with(incoming.readPacket(4)) {
             println("received server handshake")
@@ -103,7 +97,7 @@ public class DefaultSession(public val data: DefaultSessionData) : Session {
             val len = (secondOctet.toInt() shr 4).toUByte()
             val serializer = secondOctet and 0x0Fu
 
-            require(serializer == JSON_SERIALIZER_TYPE)
+//            require(serializer == JSON_SERIALIZER_TYPE)
 
             discard()
         }

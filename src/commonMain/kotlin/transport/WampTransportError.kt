@@ -1,4 +1,4 @@
-package net.lostillusion.kamp
+package net.lostillusion.kamp.transport
 
 /**
  * MUST NOT BE USED

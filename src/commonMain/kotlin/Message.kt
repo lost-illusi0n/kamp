@@ -21,12 +21,7 @@ public sealed class Message(public val type: MessageType) {
         override fun serialize(encoder: Encoder, value: Message) {
             val output = encoder as JsonEncoder
 
-            val actualSerializer = (
-                encoder.serializersModule.getPolymorphic(Message::class, value)
-                    ?: value::class.serializer()
-                ) as KSerializer<Message>
-
-            val element = output.json.encodeToJsonElement(actualSerializer, value).jsonObject
+            val element = output.json.encodeToJsonElement(encoder.actualSerializer(value), value).jsonObject
 
             output.encodeJsonElement(JsonArray(element.entries.map { it.value }))
         }
