@@ -5,6 +5,6 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 
 public data class DefaultSessionData(
     val address: NetworkAddress,
-    val messageFlow: MutableSharedFlow<Message> = MutableSharedFlow()
+    val messageFlow: MutableSharedFlow<WampMessage> = MutableSharedFlow()
 )
 

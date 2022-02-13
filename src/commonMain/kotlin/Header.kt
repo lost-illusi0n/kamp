@@ -2,7 +2,7 @@ package net.lostillusion.kamp
 
 import io.ktor.utils.io.core.*
 
-public data class Header(val frameType: FrameType, val length: Length)
+public data class Header(val frameType: FrameType, val length: WampMessageLength)
 
 internal fun ByteReadPacket.parseHeader(): Header {
     require(remaining == 4L)
@@ -17,5 +17,5 @@ internal fun ByteReadPacket.parseHeader(): Header {
         lengthValue = (lengthValue shl 8) or readByte().toInt()
     }
 
-    return Header(frame, Length(lengthValue))
+    return Header(frame, WampMessageLength(lengthValue))
 }

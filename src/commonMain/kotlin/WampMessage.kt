@@ -12,21 +12,23 @@ import kotlin.experimental.and
 
 @OptIn(ExperimentalSerializationApi::class)
 @Serializable
-public sealed class Message(public val type: MessageType) {
-    public object Serializer : KSerializer<Message> {
+public sealed class WampMessage(public val type: MessageType) {
+    public companion object : KSerializer<WampMessage> {
         override val descriptor: SerialDescriptor = JsonArray.serializer().descriptor
 
         @Suppress("UNCHECKED_CAST")
         @OptIn(InternalSerializationApi::class)
-        override fun serialize(encoder: Encoder, value: Message) {
+        override fun serialize(encoder: Encoder, value: WampMessage) {
             val output = encoder as JsonEncoder
 
-            val element = output.json.encodeToJsonElement(encoder.actualSerializer(value), value).jsonObject
+            println(value::class.simpleName)
+
+            val element = output.json.encodeToJsonElement(value.actualSerializer(encoder, value::class), value).jsonObject
 
             output.encodeJsonElement(JsonArray(element.entries.map { it.value }))
         }
 
-        override fun deserialize(decoder: Decoder): Message {
+        override fun deserialize(decoder: Decoder): WampMessage {
             val input = decoder as JsonDecoder
             val tree = input.decodeJsonElement()
 
@@ -47,7 +49,7 @@ public sealed class Message(public val type: MessageType) {
 
     // todo: fuck off, make proper frames
     public fun encodeToRawFrame(): ByteArray {
-        val serialized: ByteArray = Json.encodeToString(Serializer, this).toByteArray()
+        val serialized: ByteArray = Json.encodeToString(Companion, this).toByteArray()
 
         val frame = BytePacketBuilder().apply {
             // RRR RTTT
@@ -67,26 +69,26 @@ public sealed class Message(public val type: MessageType) {
 }
 
 @Serializable
-public data class HelloMessage(val realm: String, val details: Details) : Message(MessageType.Hello) {
+public data class HelloWampMessage(val realm: String, val details: Details) : WampMessage(MessageType.Hello) {
     @Serializable
     public data class Details(val agent: String? = null, val roles: Map<Role, JsonObject>)
 }
 
 @Serializable
-public data class WelcomeMessage(val session: Id, val details: Details) : Message(MessageType.Welcome) {
+public data class WelcomeWampMessage(val session: Id, val details: Details) : WampMessage(MessageType.Welcome) {
     @Serializable
     public data class Details(val agent: String? = null, val roles: Map<Role, JsonObject>)
 }
 
 @Serializable
 // TODO: make a uri type for reason and other similar fields
-public data class AbortMessage(val details: Details, val reason: String) : Message(MessageType.Abort) {
+public data class AbortWampMessage(val details: Details, val reason: String) : WampMessage(MessageType.Abort) {
     @Serializable
     public data class Details(val message: String)
 }
 
 @Serializable
-public data class GoodbyeMessage(val details: Details, val reason: String) : Message(MessageType.Goodbye) {
+public data class GoodbyeWampMessage(val details: Details, val reason: String) : WampMessage(MessageType.Goodbye) {
     @Serializable
     public data class Details(val message: String)
 }
@@ -96,36 +98,36 @@ public typealias Arguments = List<@Polymorphic Any>
 public typealias ArgumentsKw = Map<String, @Polymorphic Any>
 
 @Serializable
-public data class CallMessage(
+public data class CallWampMessage(
     val request: Id,
     val options: Options,
     val procedure: String,
     // these should not be present in serialized form if null
     val arguments: Arguments? = null,
     val argumentsKw: ArgumentsKw? = null
-) : Message(MessageType.Call) {
+) : WampMessage(MessageType.Call) {
     @Serializable
     public class Options
 }
 
 @Serializable
-public data class ResultMessage(
+public data class ResultWampMessage(
     val request: Id,
     val details: Details,
     val arguments: Arguments? = null,
     val argumentsKw: ArgumentsKw? = null
-) : Message(MessageType.Result) {
+) : WampMessage(MessageType.Result) {
     @Serializable
     public class Details
 }
 
 @Serializable
-public data class ErrorMessage(
+public data class ErrorWampMessage(
     val messageType: MessageType,
     val request: Id,
     val details: Details,
     val error: WampError
-) : Message(MessageType.Error) {
+) : WampMessage(MessageType.Error) {
     @Serializable
     public class Details
 }

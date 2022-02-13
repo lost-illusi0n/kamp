@@ -23,7 +23,7 @@ kotlin {
             dependencies {
                 implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.3.2")
                 implementation("io.ktor:ktor-network:1.6.7")
-                implementation("com.ensarsarajcic.kotlinx:serialization-msgpack:0.5.0")
+                implementation("org.jetbrains.kotlin:kotlin-reflect:1.6.10")
                 implementation(kotlin("stdlib-common"))
             }
         }

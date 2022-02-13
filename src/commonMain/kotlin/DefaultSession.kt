@@ -12,6 +12,8 @@ import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
+import net.lostillusion.kamp.format.Binary
+import net.lostillusion.kamp.transport.raw.WampRawTransportPacket
 
 private const val WAMP_MAGIC: Byte = 0x7F
 private const val MAX_LENGTH: UByte = 15u
@@ -21,12 +23,12 @@ public class DefaultSession(public val data: DefaultSessionData) : Session {
 
     private lateinit var outgoing: ByteWriteChannel
 
-    override val incoming: SharedFlow<Message> = data.messageFlow
+    override val incoming: SharedFlow<WampMessage> = data.messageFlow
 
     private val json = Json { ignoreUnknownKeys = true }
 
     init {
-        incoming.filterIsInstance<WelcomeMessage>()
+        incoming.filterIsInstance<WelcomeWampMessage>()
             .onEach { println("we are welcome") }
             .launchIn(scope)
     }
@@ -46,9 +48,9 @@ public class DefaultSession(public val data: DefaultSessionData) : Session {
 
         println("finished handshake.")
 
-        val hello = HelloMessage(
+        val hello = HelloWampMessage(
             realm = config.realm,
-            details = HelloMessage.Details(
+            details = HelloWampMessage.Details(
                 config.agent,
                 config.roles.associateWith { JsonObject(emptyMap()) }
             )
@@ -66,7 +68,7 @@ public class DefaultSession(public val data: DefaultSessionData) : Session {
             when (header.frameType) {
                 FrameType.Regular -> {
                     val message = json.decodeFromString(
-                        deserializer = Message.Serializer,
+                        deserializer = WampMessage,
                         string = incoming.readPacket(header.length.value).readText()
                     )
 
@@ -83,10 +85,11 @@ public class DefaultSession(public val data: DefaultSessionData) : Session {
 
     private suspend fun handshake(incoming: ByteReadChannel) {
         // TODO: abstract socket
-//        outgoing.writeFully(HANDSHAKE, 0, HANDSHAKE.size)
-//        outgoing.flush()
-//
-//        println("sent client handshake: ${HANDSHAKE.joinToString(" ") { it.toUByte().toString(2).padStart(8, '0') } }")
+        val sendingOctet = ((MAX_LENGTH.toInt() shl 4) or WampSerializerType.Json.raw.toInt()).toByte()
+        val handshake = byteArrayOf(WAMP_MAGIC, sendingOctet, 0, 0)
+        outgoing.writeFully(handshake, 0, handshake.size)
+        outgoing.flush()
+        println("sent client handshake: ${handshake.joinToString(" ") { it.toUByte().toString(2).padStart(8, '0') } }")
 
         with(incoming.readPacket(4)) {
             println("received server handshake")
@@ -103,8 +106,9 @@ public class DefaultSession(public val data: DefaultSessionData) : Session {
         }
     }
 
-    override suspend fun send(message: Message) {
-        val frame = message.encodeToRawFrame()
+    override suspend fun send(message: WampMessage) {
+        val packet = WampRawTransportPacket.Frame.Message(message)
+        val frame = Binary.encodeToByteArray(WampRawTransportPacket.Serializer, packet)
         outgoing.writeFully(frame, 0, frame.size)
         outgoing.flush()
     }

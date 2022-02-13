@@ -52,14 +52,14 @@ public sealed class MessageType(public val raw: Byte) {
     }
 }
 
-public val MessageType.messageSerializer: KSerializer<out Message>
+public val MessageType.messageSerializer: KSerializer<out WampMessage>
     get() = when (this) {
-        MessageType.Hello -> HelloMessage.serializer()
-        MessageType.Welcome -> WelcomeMessage.serializer()
-        MessageType.Abort -> AbortMessage.serializer()
-        MessageType.Goodbye -> GoodbyeMessage.serializer()
-        MessageType.Call -> CallMessage.serializer()
-        MessageType.Result -> ResultMessage.serializer()
-        MessageType.Error -> ErrorMessage.serializer()
+        MessageType.Hello -> HelloWampMessage.serializer()
+        MessageType.Welcome -> WelcomeWampMessage.serializer()
+        MessageType.Abort -> AbortWampMessage.serializer()
+        MessageType.Goodbye -> GoodbyeWampMessage.serializer()
+        MessageType.Call -> CallWampMessage.serializer()
+        MessageType.Result -> ResultWampMessage.serializer()
+        MessageType.Error -> ErrorWampMessage.serializer()
         is MessageType.Unknown -> error("unknown message type encountered: ${this.raw}")
     }
