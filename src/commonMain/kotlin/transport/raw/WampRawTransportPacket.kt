@@ -14,6 +14,7 @@ import net.lostillusion.kamp.WampMessage
 import net.lostillusion.kamp.WampSerializerType
 import net.lostillusion.kamp.format.BinaryJsonString
 import net.lostillusion.kamp.format.BinaryLength
+import net.lostillusion.kamp.format.BinaryPadding
 import net.lostillusion.kamp.format.DefaultBinarySerializer
 import kotlin.experimental.and
 
@@ -67,7 +68,7 @@ public sealed class WampRawTransportPacket(public val identifier: Byte) {
 
     @Serializable(with = Handshake.Serializer::class)
     public data class Handshake(
-        public val length: Byte,
+        public val length: UByte,
         public val serializer: WampSerializerType
     ) : WampRawTransportPacket(WAMP_MAGIC) {
         public object Serializer : KSerializer<Handshake> {
@@ -77,7 +78,7 @@ public sealed class WampRawTransportPacket(public val identifier: Byte) {
                 val data = decoder.decodeByte()
 
                 // LLLL SSSS
-                val length = (data.toInt() shr 4).toByte()
+                val length = (data.toInt() shr 4).toUByte()
                 val serializer = WampSerializerType.from(data and 0x0F)
 
                 // padding
@@ -98,7 +99,7 @@ public sealed class WampRawTransportPacket(public val identifier: Byte) {
     }
 
     @Serializable
-    public class Error() : WampRawTransportPacket(WAMP_MAGIC)
+    public class Error(@BinaryPadding(2) public val error: WampRawTransportError) : WampRawTransportPacket(WAMP_MAGIC)
 
     public sealed class Frame(identifier: Byte) : WampRawTransportPacket(identifier) {
         @Serializable(with = Message.BinarySerializer::class)

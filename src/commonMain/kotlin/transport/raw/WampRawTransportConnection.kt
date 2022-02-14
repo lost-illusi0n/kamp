@@ -4,6 +4,7 @@ import format.BinaryDecoder
 import io.ktor.network.sockets.*
 import io.ktor.util.network.*
 import kotlinx.coroutines.*
+import kotlinx.coroutines.NonCancellable.isActive
 import kotlinx.coroutines.channels.ClosedReceiveChannelException
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -13,6 +14,7 @@ import net.lostillusion.kamp.WampMessageLength
 import net.lostillusion.kamp.format.Binary
 import net.lostillusion.kamp.transport.WampTransportConnection
 import kotlin.coroutines.CoroutineContext
+import kotlin.math.pow
 import kotlin.properties.Delegates
 
 public class WampRawTransportConnection(
@@ -31,30 +33,41 @@ public class WampRawTransportConnection(
     private val incomingChannel = tcpSocket.openReadChannel()
     private val outgoingChannel = tcpSocket.openWriteChannel()
 
-    private var remoteMaxLength by Delegates.notNull<Byte>()
+    // 4 should be enough for the header until we establish this
+    private var remoteMaxLength: UByte = 4u
+    private val remoteMaxLengthInBytes
+        get() = 2f.pow(remoteMaxLength.toInt() + 9).toInt()
+
+    private val localMaxLengthInBytes = 2f.pow(connectionConfig.maxLength.toInt() + 9).toInt()
 
     init {
+        PingPong(this)
+
         scope.launch {
+            val buffer = ByteArray(localMaxLengthInBytes)
+            val headerDecoder = BinaryDecoder(buffer, 0, 1)
+
             while (isActive && !tcpSocket.isClosed) {
                 try {
-                    val header = ByteArray(4)
-                    incomingChannel.readFully(header, 0, 4)
+                    headerDecoder.cursor = 1
+                    incomingChannel.readFully(buffer, 0, 4)
 
-                    println("received header: ${header.asString}")
+                    val data = if (buffer[0] != WAMP_MAGIC) {
+                        val length = headerDecoder.decodeSerializableValue(WampMessageLength.Serializer).value
 
-                    val data = if (header[0] != WAMP_MAGIC) {
-                        val length =
-                            BinaryDecoder(header, 0, 1).decodeSerializableValue(WampMessageLength.Serializer).value
+                        if (length > localMaxLengthInBytes) {
+                            close()
+                            // TODO: upstream
+                        }
 
-                        val payload = ByteArray(length)
-                        incomingChannel.readFully(payload, 0, length)
+                        incomingChannel.readFully(buffer, 4, length)
 
-                        println("received payload: ${payload.asString}")
-
-                        header + payload
+                        buffer.copyOf(4 + length)
                     } else {
-                        header
+                        buffer.copyOf(4)
                     }
+
+                    println("received: ${data.asString}")
 
                     val packet = Binary.decodeFromByteArray(WampRawTransportPacket.Serializer, data)
 
@@ -75,14 +88,38 @@ public class WampRawTransportConnection(
             incoming.filterIsInstance<WampRawTransportPacket.Handshake>().first()
         }
 
-        // TODO: proper exceptions
-        require(remoteHandshake.serializer == connectionConfig.serializerType) { "Server responded with a different serializer!" }
+        if (remoteHandshake.serializer != connectionConfig.serializerType) {
+            println("weird")
+            close()
+
+            // TODO: propagate closed connection
+        }
 
         remoteMaxLength = remoteHandshake.length
     }
 
+    public suspend fun ping(data: ByteArray = byteArrayOf(69)) {
+        send(WampRawTransportPacket.Frame.Ping(data))
+
+        val pong = withTimeout(connectionConfig.pongTimeout) {
+            incoming.filterIsInstance<WampRawTransportPacket.Frame.Pong>().first()
+        }
+
+        if (!pong.payload.contentEquals(data)) {
+            close()
+
+            // TODO: propagate
+        }
+    }
+
     public suspend fun send(packet: WampRawTransportPacket) {
         val frame = Binary.encodeToByteArray(WampRawTransportPacket.Serializer, packet)
+
+        if (frame.size > remoteMaxLengthInBytes) {
+            println("dropping a packet too large!: $packet")
+            return
+        }
+
         println("sending: ${frame.asString}")
         outgoingChannel.writeFully(frame, 0, frame.size)
         outgoingChannel.flush()

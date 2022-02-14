@@ -84,6 +84,12 @@ public actual class DefaultBinarySerializer<T : Any> actual constructor(private 
                     }
                 }
             }
+
+            if (it.hasAnnotation<BinaryPadding>()) {
+                val length = it.findAnnotation<BinaryPadding>()!!.length
+
+                repeat(length) { decoder.decodeByte() }
+            }
         }
 
         return primary.call(*values.toTypedArray())
@@ -123,6 +129,12 @@ public actual class DefaultBinarySerializer<T : Any> actual constructor(private 
                         serializer.serialize(encoder, property)
                     }
                 }
+            }
+
+            if (it.hasAnnotation<BinaryPadding>()) {
+                val padding = it.findAnnotation<BinaryPadding>()!!.length
+
+                repeat(padding) { encoder.encodeByte(0) }
             }
         }
     }
