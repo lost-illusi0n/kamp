@@ -19,9 +19,9 @@ public class SessionConfigBuilder(public val realm: String) {
     public fun build(): SessionConfig = SessionConfig(agent, realm, roles)
 }
 
-internal fun SessionConfig.intoHello(): HelloWampMessage = HelloWampMessage(
+internal fun SessionConfig.intoHello(): WampMessage.Hello = WampMessage.Hello(
     realm = realm,
-    details = HelloWampMessage.Details(
+    details = WampMessage.Hello.Details(
         agent = agent,
         roles = roles.associateWith { JsonObject(emptyMap()) }
     )

@@ -10,6 +10,8 @@ public interface WampTransportSocket {
     public val incoming: SharedFlow<WampMessage>
 
     public suspend fun send(message: WampMessage)
+
+    public suspend fun close()
 }
 
 public suspend inline fun <reified Type : WampMessage> Flow<WampMessage>.firstOf(): Type =

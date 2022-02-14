@@ -10,6 +10,5 @@ import kotlin.reflect.KClass
 
 @OptIn(ExperimentalSerializationApi::class, InternalSerializationApi::class)
 internal inline fun <T : Any> T.actualSerializer(encoder: Encoder, klass: KClass<out T>): KSerializer<T> {
-    println(klass.simpleName)
     return (serializersModule.getPolymorphic(klass as KClass<T>, this) ?: klass.serializerOrNull()) as KSerializer<T>
 }

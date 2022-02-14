@@ -13,9 +13,9 @@ public class WampClient(
         url: NetworkAddress,
         config: SessionConfig,
         sessionCoroutineContext: CoroutineContext = EmptyCoroutineContext
-    ): WampSession {
+    ): DefaultWampSession {
         val socket = socketClient.connect(url, sessionCoroutineContext)
-        val session = WampSession(socket, config, sessionCoroutineContext)
+        val session = DefaultWampSession(socket, config, sessionCoroutineContext)
         session.hello()
         return session
     }
@@ -24,5 +24,5 @@ public class WampClient(
         url: NetworkAddress,
         realm: String,
         config: SessionConfigBuilder.() -> Unit = { }
-    ): WampSession = connect(url, SessionConfigBuilder(realm).apply(config).build())
+    ): DefaultWampSession = connect(url, SessionConfigBuilder(realm).apply(config).build())
 }

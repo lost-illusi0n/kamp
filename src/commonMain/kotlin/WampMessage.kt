@@ -1,12 +1,10 @@
 package net.lostillusion.kamp
 
-import io.ktor.utils.io.core.*
 import kotlinx.serialization.*
 import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
 import kotlinx.serialization.json.*
-import kotlin.experimental.and
 
 // TODO: open up for extension messages
 
@@ -20,8 +18,6 @@ public sealed class WampMessage(public val type: MessageType) {
         @OptIn(InternalSerializationApi::class)
         override fun serialize(encoder: Encoder, value: WampMessage) {
             val output = encoder as JsonEncoder
-
-            println(value::class.simpleName)
 
             val element = output.json.encodeToJsonElement(value.actualSerializer(encoder, value::class), value).jsonObject
 
@@ -47,87 +43,67 @@ public sealed class WampMessage(public val type: MessageType) {
         )
     }
 
-    // todo: fuck off, make proper frames
-    public fun encodeToRawFrame(): ByteArray {
-        val serialized: ByteArray = Json.encodeToString(Companion, this).toByteArray()
+    @Serializable
+    public data class Hello(val realm: String, val details: Details) : WampMessage(MessageType.Hello) {
+        @Serializable
+        public data class Details(val agent: String? = null, val roles: Map<Role, JsonObject>)
+    }
 
-        val frame = BytePacketBuilder().apply {
-            // RRR RTTT
-            require(FrameType.Regular.raw and ((0xFF shl 3).toByte()) == 0.toByte())
-            writeByte(FrameType.Regular.raw)
+    @Serializable
+    public data class Welcome(val session: Id, val details: Details) : WampMessage(MessageType.Welcome) {
+        @Serializable
+        public data class Details(val agent: String? = null, val roles: Map<Role, JsonObject>)
+    }
 
-            // 3 byte length field
-            writeByte((serialized.size shr 16).toByte())
-            writeByte((serialized.size shr 8).toByte())
-            writeByte(serialized.size.toByte())
+    @Serializable
+// TODO: make a uri type for reason and other similar fields
+    public data class Abort(val details: Details, val reason: String) : WampMessage(MessageType.Abort) {
+        @Serializable
+        public data class Details(val message: String)
+    }
 
-            writeFully(serialized)
-        }
+    @Serializable
+    public data class Goodbye(val details: Details = Details(), val reason: WampClose) : WampMessage(MessageType.Goodbye) {
+        @Serializable
+        public data class Details(val message: String? = null)
+    }
 
-        return frame.build().readBytes()
+    @Serializable
+    public data class Call(
+        val request: Id,
+        val options: Options,
+        val procedure: String,
+        // these should not be present in serialized form if null
+        val arguments: Arguments? = null,
+        val argumentsKw: ArgumentsKw? = null
+    ) : WampMessage(MessageType.Call) {
+        @Serializable
+        public class Options
+    }
+
+    @Serializable
+    public data class Result(
+        val request: Id,
+        val details: Details,
+        val arguments: Arguments? = null,
+        val argumentsKw: ArgumentsKw? = null
+    ) : WampMessage(MessageType.Result) {
+        @Serializable
+        public class Details
+    }
+
+    @Serializable
+    public data class Error(
+        val messageType: MessageType,
+        val request: Id,
+        val details: Details,
+        val error: WampError
+    ) : WampMessage(MessageType.Error) {
+        @Serializable
+        public class Details
     }
 }
 
-@Serializable
-public data class HelloWampMessage(val realm: String, val details: Details) : WampMessage(MessageType.Hello) {
-    @Serializable
-    public data class Details(val agent: String? = null, val roles: Map<Role, JsonObject>)
-}
-
-@Serializable
-public data class WelcomeWampMessage(val session: Id, val details: Details) : WampMessage(MessageType.Welcome) {
-    @Serializable
-    public data class Details(val agent: String? = null, val roles: Map<Role, JsonObject>)
-}
-
-@Serializable
-// TODO: make a uri type for reason and other similar fields
-public data class AbortWampMessage(val details: Details, val reason: String) : WampMessage(MessageType.Abort) {
-    @Serializable
-    public data class Details(val message: String)
-}
-
-@Serializable
-public data class GoodbyeWampMessage(val details: Details, val reason: String) : WampMessage(MessageType.Goodbye) {
-    @Serializable
-    public data class Details(val message: String)
-}
-
-public typealias Arguments = List<@Polymorphic Any>
-
 public typealias ArgumentsKw = Map<String, @Polymorphic Any>
 
-@Serializable
-public data class CallWampMessage(
-    val request: Id,
-    val options: Options,
-    val procedure: String,
-    // these should not be present in serialized form if null
-    val arguments: Arguments? = null,
-    val argumentsKw: ArgumentsKw? = null
-) : WampMessage(MessageType.Call) {
-    @Serializable
-    public class Options
-}
-
-@Serializable
-public data class ResultWampMessage(
-    val request: Id,
-    val details: Details,
-    val arguments: Arguments? = null,
-    val argumentsKw: ArgumentsKw? = null
-) : WampMessage(MessageType.Result) {
-    @Serializable
-    public class Details
-}
-
-@Serializable
-public data class ErrorWampMessage(
-    val messageType: MessageType,
-    val request: Id,
-    val details: Details,
-    val error: WampError
-) : WampMessage(MessageType.Error) {
-    @Serializable
-    public class Details
-}
+public typealias Arguments = List<@Polymorphic Any>

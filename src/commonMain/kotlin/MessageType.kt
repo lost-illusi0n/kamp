@@ -7,6 +7,7 @@ import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
 import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
+import kotlinx.serialization.serializer
 
 @Serializable(with = MessageType.Serializer::class)
 public sealed class MessageType(public val raw: Byte) {
@@ -54,12 +55,12 @@ public sealed class MessageType(public val raw: Byte) {
 
 public val MessageType.messageSerializer: KSerializer<out WampMessage>
     get() = when (this) {
-        MessageType.Hello -> HelloWampMessage.serializer()
-        MessageType.Welcome -> WelcomeWampMessage.serializer()
-        MessageType.Abort -> AbortWampMessage.serializer()
-        MessageType.Goodbye -> GoodbyeWampMessage.serializer()
-        MessageType.Call -> CallWampMessage.serializer()
-        MessageType.Result -> ResultWampMessage.serializer()
-        MessageType.Error -> ErrorWampMessage.serializer()
+        MessageType.Hello -> WampMessage.Hello.serializer()
+        MessageType.Welcome -> WampMessage.Welcome.serializer()
+        MessageType.Abort -> WampMessage.Abort.serializer()
+        MessageType.Goodbye -> WampMessage.Goodbye.serializer()
+        MessageType.Call -> WampMessage.Call.serializer()
+        MessageType.Result -> WampMessage.Result.serializer()
+        MessageType.Error -> WampMessage.Error.serializer()
         is MessageType.Unknown -> error("unknown message type encountered: ${this.raw}")
     }

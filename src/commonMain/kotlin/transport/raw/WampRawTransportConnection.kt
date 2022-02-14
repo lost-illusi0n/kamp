@@ -4,6 +4,7 @@ import format.BinaryDecoder
 import io.ktor.network.sockets.*
 import io.ktor.util.network.*
 import kotlinx.coroutines.*
+import kotlinx.coroutines.channels.ClosedReceiveChannelException
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.filterIsInstance
@@ -34,30 +35,35 @@ public class WampRawTransportConnection(
 
     init {
         scope.launch {
-            while (isActive) {
-                val header = ByteArray(4)
-                incomingChannel.readFully(header, 0, 4)
+            while (isActive && !tcpSocket.isClosed) {
+                try {
+                    val header = ByteArray(4)
+                    incomingChannel.readFully(header, 0, 4)
 
-                println("received header: ${header.asString}")
+                    println("received header: ${header.asString}")
 
-                val data = if (header[0] != WAMP_MAGIC) {
-                    val length = BinaryDecoder(header, 0, 1).decodeSerializableValue(WampMessageLength.Serializer).value
+                    val data = if (header[0] != WAMP_MAGIC) {
+                        val length =
+                            BinaryDecoder(header, 0, 1).decodeSerializableValue(WampMessageLength.Serializer).value
 
-                    val payload = ByteArray(length)
-                    incomingChannel.readFully(payload, 0, length)
+                        val payload = ByteArray(length)
+                        incomingChannel.readFully(payload, 0, length)
 
-                    println("received payload: ${payload.asString}")
+                        println("received payload: ${payload.asString}")
 
-                    header + payload
-                } else {
-                    header
+                        header + payload
+                    } else {
+                        header
+                    }
+
+                    val packet = Binary.decodeFromByteArray(WampRawTransportPacket.Serializer, data)
+
+                    println("received: $packet")
+
+                    _incoming.emit(packet)
+                } catch (e: ClosedReceiveChannelException) {
+                    // TODO: send this upstream
                 }
-
-                val packet = Binary.decodeFromByteArray(WampRawTransportPacket.Serializer, data)
-
-                println("received: $packet")
-
-                _incoming.emit(packet)
             }
         }
     }
@@ -80,6 +86,12 @@ public class WampRawTransportConnection(
         println("sending: ${frame.asString}")
         outgoingChannel.writeFully(frame, 0, frame.size)
         outgoingChannel.flush()
+    }
+
+    public suspend fun close() {
+        tcpSocket.close()
+        tcpSocket.awaitClosed()
+        scope.cancel()
     }
 }
 
