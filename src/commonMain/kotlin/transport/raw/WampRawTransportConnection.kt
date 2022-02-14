@@ -3,22 +3,18 @@ package net.lostillusion.kamp.transport.raw
 import format.BinaryDecoder
 import io.ktor.network.sockets.*
 import io.ktor.util.network.*
+import io.ktor.utils.io.*
 import kotlinx.coroutines.*
-import kotlinx.coroutines.NonCancellable.isActive
 import kotlinx.coroutines.channels.ClosedReceiveChannelException
-import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.SharedFlow
-import kotlinx.coroutines.flow.filterIsInstance
-import kotlinx.coroutines.flow.first
-import net.lostillusion.kamp.WampMessageLength
+import kotlinx.coroutines.flow.*
+import net.lostillusion.kamp.*
 import net.lostillusion.kamp.format.Binary
 import net.lostillusion.kamp.transport.WampTransportConnection
 import kotlin.coroutines.CoroutineContext
 import kotlin.math.pow
-import kotlin.properties.Delegates
 
 public class WampRawTransportConnection(
-    private val tcpSocket: Socket,
+    internal val tcpSocket: Socket,
     private val connectionConfig: WampRawTransportConnectionConfig,
     coroutineContext: CoroutineContext
 ) : WampTransportConnection {
@@ -30,7 +26,6 @@ public class WampRawTransportConnection(
     private val _incoming: MutableSharedFlow<WampRawTransportPacket> = MutableSharedFlow()
     public val incoming: SharedFlow<WampRawTransportPacket> = _incoming
 
-    private val incomingChannel = tcpSocket.openReadChannel()
     private val outgoingChannel = tcpSocket.openWriteChannel()
 
     // 4 should be enough for the header until we establish this
@@ -38,45 +33,15 @@ public class WampRawTransportConnection(
     private val remoteMaxLengthInBytes
         get() = 2f.pow(remoteMaxLength.toInt() + 9).toInt()
 
-    private val localMaxLengthInBytes = 2f.pow(connectionConfig.maxLength.toInt() + 9).toInt()
+    internal val localMaxLengthInBytes = 2f.pow(connectionConfig.maxLength.toInt() + 9).toInt()
 
     init {
         PingPong(this)
-
+        SocketReader(tcpSocket.openReadChannel(), _incoming, this)
         scope.launch {
-            val buffer = ByteArray(localMaxLengthInBytes)
-            val headerDecoder = BinaryDecoder(buffer, 0, 1)
-
-            while (isActive && !tcpSocket.isClosed) {
-                try {
-                    headerDecoder.cursor = 1
-                    incomingChannel.readFully(buffer, 0, 4)
-
-                    val data = if (buffer[0] != WAMP_MAGIC) {
-                        val length = headerDecoder.decodeSerializableValue(WampMessageLength.Serializer).value
-
-                        if (length > localMaxLengthInBytes) {
-                            close()
-                            // TODO: upstream
-                        }
-
-                        incomingChannel.readFully(buffer, 4, length)
-
-                        buffer.copyOf(4 + length)
-                    } else {
-                        buffer.copyOf(4)
-                    }
-
-                    println("received: ${data.asString}")
-
-                    val packet = Binary.decodeFromByteArray(WampRawTransportPacket.Serializer, data)
-
-                    println("received: $packet")
-
-                    _incoming.emit(packet)
-                } catch (e: ClosedReceiveChannelException) {
-                    // TODO: send this upstream
-                }
+            incoming.filterIsInstance<WampMessage.Goodbye>().onEach {
+                send(WampRawTransportPacket.Frame.Message(WampMessage.Goodbye(reason = WampClose.GoodbyeAndOut)))
+                close()
             }
         }
     }
@@ -84,15 +49,20 @@ public class WampRawTransportConnection(
     internal suspend fun handshake() {
         send(connectionConfig.intoHandshake())
 
-        val remoteHandshake = withTimeout(connectionConfig.handshakeTimeout) {
+        val remoteHandshake = withTimeoutOrNull(connectionConfig.handshakeTimeout) {
             incoming.filterIsInstance<WampRawTransportPacket.Handshake>().first()
-        }
+        } ?: throw WampTimeout(
+            remoteAddress,
+            "Timed out waiting ${connectionConfig.handshakeTimeout}ms for a handshake back!"
+        )
 
         if (remoteHandshake.serializer != connectionConfig.serializerType) {
-            println("weird")
             close()
 
-            // TODO: propagate closed connection
+            throw WampRawTransportProtocolViolationException(
+                remoteAddress,
+                "Sent serializer of type ${connectionConfig.serializerType} but received ${remoteHandshake.serializer} instead!"
+            )
         }
 
         remoteMaxLength = remoteHandshake.length
@@ -101,14 +71,17 @@ public class WampRawTransportConnection(
     public suspend fun ping(data: ByteArray = byteArrayOf(69)) {
         send(WampRawTransportPacket.Frame.Ping(data))
 
-        val pong = withTimeout(connectionConfig.pongTimeout) {
+        val pong = withTimeoutOrNull(connectionConfig.pongTimeout) {
             incoming.filterIsInstance<WampRawTransportPacket.Frame.Pong>().first()
-        }
+        } ?: throw WampTimeout(remoteAddress, "Timed out waiting ${connectionConfig.pongTimeout}ms for a pong back!")
 
         if (!pong.payload.contentEquals(data)) {
             close()
 
-            // TODO: propagate
+            throw WampRawTransportProtocolViolationException(
+                remoteAddress,
+                "Ping sent payload: ${data.asString} but pong returned different payload!: ${pong.payload.asString}!"
+            )
         }
     }
 
@@ -131,6 +104,61 @@ public class WampRawTransportConnection(
         scope.cancel()
     }
 }
+
+private class SocketReader(
+    incoming: ByteReadChannel,
+    output: MutableSharedFlow<WampRawTransportPacket>,
+    connection: WampRawTransportConnection
+) {
+    init {
+        connection.scope.launch {
+            val buffer = ByteArray(connection.localMaxLengthInBytes)
+            val headerDecoder = BinaryDecoder(buffer, 0, 1)
+
+            while (isActive && !connection.tcpSocket.isClosed) {
+                try {
+                    headerDecoder.cursor = 1
+                    incoming.readFully(buffer, 0, 4)
+
+                    val data = if (buffer[0] != WAMP_MAGIC) {
+                        val length = headerDecoder.decodeSerializableValue(WampMessageLength.Serializer).value
+
+                        if (length > connection.localMaxLengthInBytes) {
+                            connection.close()
+
+                            throw WampRawTransportProtocolViolationException(
+                                connection.remoteAddress,
+                                "Peer sent packet larger than our requested max length! Received: $length bytes | Expected (maximum): ${connection.localMaxLengthInBytes} bytes"
+                            )
+                        }
+
+                        incoming.readFully(buffer, 4, length)
+
+                        buffer.copyOf(4 + length)
+                    } else {
+                        buffer.copyOf(4)
+                    }
+
+                    println("received: ${data.asString}")
+
+                    val packet = Binary.decodeFromByteArray(WampRawTransportPacket.Serializer, data)
+
+                    println("received: $packet")
+
+                    output.emit(packet)
+                } catch (e: ClosedReceiveChannelException) {
+                    throw WampTransportClosedException(connection.remoteAddress)
+                }
+            }
+        }
+    }
+}
+
+public class WampRawTransportProtocolViolationException(host: NetworkAddress, message: String) :
+    WampTransportException(host, message)
+
+public class WampTransportClosedException(host: NetworkAddress) :
+    WampTransportException(host, "The WAMP transport connection for $host has closed!")
 
 private val ByteArray.asString
     get() = joinToString(" ") { it.toUByte().toString(2).padStart(8, '0') }

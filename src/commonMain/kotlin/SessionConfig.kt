@@ -5,6 +5,10 @@ import kotlinx.serialization.json.JsonObject
 public data class SessionConfig(val agent: String?, val realm: String, val roles: Set<Role>)
 
 public class SessionConfigBuilder(public val realm: String) {
+    private companion object {
+        private val DEFAULT_ROLES = setOf(Role.Caller, Role.Callee, Role.Publisher, Role.Subscriber)
+    }
+
     public val roles: MutableSet<Role> = mutableSetOf()
     public var agent: String? = null
 
@@ -16,7 +20,20 @@ public class SessionConfigBuilder(public val realm: String) {
         roles += Role.Caller
     }
 
-    public fun build(): SessionConfig = SessionConfig(agent, realm, roles)
+    public fun publisher() {
+        roles += Role.Publisher
+    }
+
+    public fun subscriber() {
+        roles += Role.Subscriber
+    }
+
+    public fun build(): SessionConfig =
+        SessionConfig(
+            agent,
+            realm,
+            roles.ifEmpty { DEFAULT_ROLES }
+        )
 }
 
 internal fun SessionConfig.intoHello(): WampMessage.Hello = WampMessage.Hello(

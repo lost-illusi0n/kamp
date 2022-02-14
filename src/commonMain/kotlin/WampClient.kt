@@ -9,6 +9,7 @@ import kotlin.coroutines.EmptyCoroutineContext
 public class WampClient(
     private val socketClient: WampTransportSocketClient = WampTransportSocketClient.default(),
 ) {
+    @Throws(WampException::class)
     public suspend fun connect(
         url: NetworkAddress,
         config: SessionConfig,
@@ -20,6 +21,7 @@ public class WampClient(
         return session
     }
 
+    @Throws(WampException::class)
     public suspend fun connect(
         url: NetworkAddress,
         realm: String,

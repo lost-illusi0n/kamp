@@ -9,16 +9,15 @@ import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
 
 @Serializable(with = WampSerializerType.Serializer::class)
-public sealed class WampSerializerType(public val raw: Byte) {
-    public object Json : WampSerializerType(1)
-    public object MessagePack : WampSerializerType(2)
-    public class Unknown(raw: Byte) : WampSerializerType(raw)
+public enum class WampSerializerType(public val raw: Byte) {
+    Json(1),
+    MessagePack(2);
 
     public companion object {
         public fun from(raw: Byte): WampSerializerType = when (raw.toInt()) {
             1 -> Json
             2 -> MessagePack
-            else -> Unknown(raw)
+            else -> error("unknown serializer type: $raw")
         }
     }
 
