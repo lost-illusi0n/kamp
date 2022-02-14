@@ -16,6 +16,8 @@ import kotlin.reflect.KProperty1
 import kotlin.reflect.full.*
 import kotlin.reflect.jvm.jvmErasure
 
+private val json = Json { ignoreUnknownKeys = true }
+
 // we need reflection for now
 // the reason for a custom serializer is to allow for
 // variable-sized lengths for collections. by default
@@ -76,7 +78,7 @@ public actual class DefaultBinarySerializer<T : Any> actual constructor(private 
                         val length = it.findAnnotation<BinaryLength>()!!
 
                         val text = length.binarySerializer.objectInstance!!.deserialize(decoder) as String
-                        Json.decodeFromString(it.returnType.jvmErasure.serializer, text)
+                        json.decodeFromString(it.returnType.jvmErasure.serializer, text)
                     } else {
                         it.returnType.jvmErasure.serializer().deserialize(decoder)
                     }
@@ -115,7 +117,7 @@ public actual class DefaultBinarySerializer<T : Any> actual constructor(private 
                         val binarySerializer =
                             it.findAnnotation<BinaryLength>()!!.binarySerializer.objectInstance!! as KSerializer<String>
 
-                        val text = Json.encodeToString((it.returnType.jvmErasure as KClass<Any>).serializer, property)
+                        val text = json.encodeToString((it.returnType.jvmErasure as KClass<Any>).serializer, property)
                         binarySerializer.serialize(encoder, text)
                     } else {
                         serializer.serialize(encoder, property)
@@ -138,7 +140,7 @@ private fun <T : Any> JsonArray.toValue(klass: KClass<T>): T {
         )
     )
 
-    return Json.decodeFromJsonElement(serializer, jsonObject)
+    return json.decodeFromJsonElement(serializer, jsonObject)
 }
 
 @OptIn(InternalSerializationApi::class)

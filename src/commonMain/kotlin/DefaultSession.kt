@@ -13,12 +13,16 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import net.lostillusion.kamp.format.Binary
+import net.lostillusion.kamp.transport.WampTransportSocket
 import net.lostillusion.kamp.transport.raw.WampRawTransportPacket
 
 private const val WAMP_MAGIC: Byte = 0x7F
 private const val MAX_LENGTH: UByte = 15u
 
-public class DefaultSession(public val data: DefaultSessionData) : Session {
+public class DefaultSession(
+    public val data: DefaultSessionData,
+    public val socket: WampTransportSocket
+) : Session {
     public val scope: CoroutineScope = CoroutineScope(SupervisorJob() + CoroutineName("kamp-session"))
 
     private lateinit var outgoing: ByteWriteChannel
@@ -107,6 +111,7 @@ public class DefaultSession(public val data: DefaultSessionData) : Session {
     }
 
     override suspend fun send(message: WampMessage) {
+        socket.send(message)
         val packet = WampRawTransportPacket.Frame.Message(message)
         val frame = Binary.encodeToByteArray(WampRawTransportPacket.Serializer, packet)
         outgoing.writeFully(frame, 0, frame.size)

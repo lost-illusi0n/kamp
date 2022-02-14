@@ -1,5 +1,7 @@
 package net.lostillusion.kamp.transport
 
-public interface WampTransportConnection {
+import io.ktor.util.network.*
 
+public interface WampTransportConnection {
+    public val remoteAddress: NetworkAddress
 }

@@ -1,7 +1,5 @@
 package net.lostillusion.kamp.transport.raw
 
-import kotlinx.serialization.ExperimentalSerializationApi
-import kotlinx.serialization.InternalSerializationApi
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ByteArraySerializer
@@ -10,13 +8,14 @@ import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.descriptors.buildClassSerialDescriptor
 import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
-import net.lostillusion.kamp.*
+import net.lostillusion.kamp.BinaryWampMessageLengthBasedByteArraySerializer
 import net.lostillusion.kamp.BinaryWampMessageLengthBasedStringSerializer
+import net.lostillusion.kamp.WampMessage
+import net.lostillusion.kamp.WampSerializerType
 import net.lostillusion.kamp.format.BinaryJsonString
 import net.lostillusion.kamp.format.BinaryLength
 import net.lostillusion.kamp.format.DefaultBinarySerializer
 import kotlin.experimental.and
-import kotlin.reflect.KProperty1
 
 public const val WAMP_MAGIC: Byte = 0x7F
 
@@ -25,7 +24,6 @@ public sealed class WampRawTransportPacket(public val identifier: Byte) {
     public object Serializer : KSerializer<WampRawTransportPacket> {
         override val descriptor: SerialDescriptor = buildClassSerialDescriptor("Packet") {
             element("identifier", Byte.serializer().descriptor)
-            element("rest", ByteArraySerializer().descriptor)
         }
 
         override fun deserialize(decoder: Decoder): WampRawTransportPacket {
@@ -46,16 +44,14 @@ public sealed class WampRawTransportPacket(public val identifier: Byte) {
                     // lose the identifier :(
                     return when (identifier.toInt()) {
                         0 -> Frame.Message.BinarySerializer.deserialize(decoder)
-                        1 -> Frame.Ping.Serializer.deserialize(decoder)
-                        2 -> Frame.Pong.Serializer.deserialize(decoder)
+                        1 -> Frame.Ping.BinarySerializer.deserialize(decoder)
+                        2 -> Frame.Pong.BinarySerializer.deserialize(decoder)
                         else -> error("missing frame serializer case")
                     }
                 }
             }
         }
 
-        @OptIn(ExperimentalSerializationApi::class, InternalSerializationApi::class)
-        @Suppress("UNCHECKED_CAST")
         override fun serialize(encoder: Encoder, value: WampRawTransportPacket) {
             encoder.encodeByte(value.identifier)
 
@@ -63,17 +59,17 @@ public sealed class WampRawTransportPacket(public val identifier: Byte) {
                 is Handshake -> Handshake.serializer().serialize(encoder, value)
                 is Error -> Error.serializer().serialize(encoder, value)
                 is Frame.Message -> Frame.Message.BinarySerializer.serialize(encoder, value)
-                is Frame.Ping -> Frame.Ping.Serializer.serialize(encoder, value)
-                is Frame.Pong -> Frame.Pong.Serializer.serialize(encoder, value)
+                is Frame.Ping -> Frame.Ping.BinarySerializer.serialize(encoder, value)
+                is Frame.Pong -> Frame.Pong.BinarySerializer.serialize(encoder, value)
             }
         }
     }
 
     @Serializable(with = Handshake.Serializer::class)
-    public data class Handshake(public val length: Byte, public val serializer: WampSerializerType) :
-        WampRawTransportPacket(
-            WAMP_MAGIC
-        ) {
+    public data class Handshake(
+        public val length: Byte,
+        public val serializer: WampSerializerType
+    ) : WampRawTransportPacket(WAMP_MAGIC) {
         public object Serializer : KSerializer<Handshake> {
             override val descriptor: SerialDescriptor = ByteArraySerializer().descriptor
 
@@ -114,51 +110,20 @@ public sealed class WampRawTransportPacket(public val identifier: Byte) {
             internal object BinarySerializer : KSerializer<Message> by DefaultBinarySerializer(Message::class)
         }
 
-        @Serializable(with = Ping.Serializer::class)
-        public class Ping(public val length: WampMessageLength, public val payload: ByteArray) : Frame(1) {
-            public object Serializer :
-                KSerializer<Ping> by frameSerializer(
-                    ByteArraySerializer(),
-                    Ping::length,
-                    Ping::payload,
-                    { l, p -> Ping(l, p) }
-                )
+        @Serializable(with = Ping.BinarySerializer::class)
+        public class Ping(
+            @BinaryLength(BinaryWampMessageLengthBasedByteArraySerializer::class)
+            public val payload: ByteArray
+        ) : Frame(1) {
+            internal object BinarySerializer : KSerializer<Ping> by DefaultBinarySerializer(Ping::class)
         }
 
-        @Serializable(with = Pong.Serializer::class)
-        public class Pong(public val length: WampMessageLength, public val payload: ByteArray) : Frame(3) {
-            public object Serializer :
-                KSerializer<Pong> by frameSerializer(
-                    ByteArraySerializer(),
-                    Pong::length,
-                    Pong::payload,
-                    { l, p -> Pong(l, p) }
-                )
+        @Serializable(with = Pong.BinarySerializer::class)
+        public class Pong(
+            @BinaryLength(BinaryWampMessageLengthBasedByteArraySerializer::class)
+            public val payload: ByteArray
+        ) : Frame(3) {
+            internal object BinarySerializer : KSerializer<Pong> by DefaultBinarySerializer(Pong::class)
         }
-    }
-}
-
-private inline fun <reified T : WampRawTransportPacket.Frame, reified Payload : Any> frameSerializer(
-    serializer: KSerializer<Payload>,
-    lengthProp: KProperty1<T, WampMessageLength>,
-    payloadProp: KProperty1<T, Payload>,
-    crossinline creator: (WampMessageLength, Payload) -> T
-) = object : KSerializer<T> {
-    override val descriptor: SerialDescriptor = ByteArraySerializer().descriptor
-
-    override fun deserialize(decoder: Decoder): T {
-        val length = decoder.decodeSerializableValue(WampMessageLength.serializer())
-
-        val payload = decoder.decodeSerializableValue(serializer)
-
-        return creator(length, payload)
-    }
-
-    override fun serialize(encoder: Encoder, value: T) {
-        val length = lengthProp.get(value)
-        val payload = payloadProp.get(value)
-
-        encoder.encodeSerializableValue(WampMessageLength.serializer(), length)
-        encoder.encodeSerializableValue(serializer, payload)
     }
 }
