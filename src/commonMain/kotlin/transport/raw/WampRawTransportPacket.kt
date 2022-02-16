@@ -75,11 +75,11 @@ public sealed class WampRawTransportPacket(public val identifier: Byte) {
             override val descriptor: SerialDescriptor = ByteArraySerializer().descriptor
 
             override fun deserialize(decoder: Decoder): Handshake {
-                val data = decoder.decodeByte()
+                val data = decoder.decodeByte().toUByte()
 
                 // LLLL SSSS
                 val length = (data.toInt() shr 4).toUByte()
-                val serializer = WampSerializerType.from(data and 0x0F)
+                val serializer = WampSerializerType.from((data and 0x0Fu).toByte())
 
                 // padding
                 repeat(2) { decoder.decodeByte() }

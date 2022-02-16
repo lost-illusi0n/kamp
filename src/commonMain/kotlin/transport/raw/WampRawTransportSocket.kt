@@ -1,24 +1,17 @@
 package net.lostillusion.kamp.transport.raw
 
-import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import net.lostillusion.kamp.WampMessage
 import net.lostillusion.kamp.transport.WampTransportSocket
-import kotlin.coroutines.CoroutineContext
-import kotlin.coroutines.EmptyCoroutineContext
 
 public class WampRawTransportSocket(
-    public val connection: WampRawTransportConnection,
-    coroutineContext: CoroutineContext = EmptyCoroutineContext
+    public val connection: WampRawTransportConnection
 ): WampTransportSocket {
-    public val scope: CoroutineScope =
-        CoroutineScope(SupervisorJob() + coroutineContext + CoroutineName("wamp-raw-transport-socket"))
-
-    override val incoming: SharedFlow<WampMessage> = connection
-        .incoming
+    override val incoming: Flow<WampMessage> = connection
+        .incomingPackets
+        .catch { close(it); throw it }
         .filterIsInstance<WampRawTransportPacket.Frame.Message>()
         .map { it.message }
-        .shareIn(scope, SharingStarted.Eagerly)
 
     private suspend fun send(packet: WampRawTransportPacket) {
         connection.send(packet)
@@ -28,8 +21,9 @@ public class WampRawTransportSocket(
         send(WampRawTransportPacket.Frame.Message(message))
     }
 
-    override suspend fun close() {
-        connection.close()
-        scope.cancel()
+    override suspend fun close(cause: Throwable?) {
+        if (cause !is WampTransportClosedException) {
+            connection.close()
+        }
     }
 }

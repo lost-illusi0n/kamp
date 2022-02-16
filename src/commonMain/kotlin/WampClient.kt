@@ -13,18 +13,19 @@ public class WampClient(
     public suspend fun connect(
         url: NetworkAddress,
         config: SessionConfig,
-        sessionCoroutineContext: CoroutineContext = EmptyCoroutineContext
+        coroutineContext: CoroutineContext = EmptyCoroutineContext
     ): DefaultWampSession {
-        val socket = socketClient.connect(url, sessionCoroutineContext)
-        val session = DefaultWampSession(socket, config, sessionCoroutineContext)
+        val socket = socketClient.connect(url, coroutineContext)
+        val session = DefaultWampSession(socket, config, coroutineContext)
         session.hello()
         return session
     }
 
     @Throws(WampException::class)
     public suspend fun connect(
-        url: NetworkAddress,
+        host: NetworkAddress,
         realm: String,
+        coroutineContext: CoroutineContext = EmptyCoroutineContext,
         config: SessionConfigBuilder.() -> Unit = { }
-    ): DefaultWampSession = connect(url, SessionConfigBuilder(realm).apply(config).build())
+    ): DefaultWampSession = connect(host, SessionConfigBuilder(realm).apply(config).build(), coroutineContext)
 }

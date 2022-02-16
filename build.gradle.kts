@@ -24,6 +24,7 @@ kotlin {
                 implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.3.2")
                 implementation("io.ktor:ktor-network:1.6.7")
                 implementation("org.jetbrains.kotlin:kotlin-reflect:1.6.10")
+                implementation("io.github.microutils:kotlin-logging:2.1.21")
                 implementation(kotlin("stdlib-common"))
             }
         }

@@ -1,14 +1,15 @@
 package net.lostillusion.kamp
 
-import kotlinx.coroutines.CoroutineName
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
-import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.*
+import mu.KotlinLogging
 import net.lostillusion.kamp.transport.WampTransportSocket
 import net.lostillusion.kamp.transport.firstOf
+import net.lostillusion.kamp.transport.raw.WampTransportClosedException
 import kotlin.coroutines.CoroutineContext
 import kotlin.properties.Delegates
+
+private val logger = KotlinLogging.logger { }
 
 public class DefaultWampSession(
     public val socket: WampTransportSocket,
@@ -20,7 +21,36 @@ public class DefaultWampSession(
 
     private var session: Id by Delegates.notNull()
 
-    public override val incoming: SharedFlow<WampMessage> = socket.incoming
+    private val _incoming: MutableSharedFlow<WampMessage> = MutableSharedFlow()
+    public override val incoming: SharedFlow<WampMessage> = _incoming
+
+    init {
+        socket.incoming
+            .catch { error(it) }
+            .onEach { _incoming.emit(it) }
+            .launchIn(scope)
+    }
+
+    private suspend fun error(cause: Throwable? = null) {
+        // todo: handle errors propagated
+
+        if (cause is WampTransportClosedException) {
+            logger.info(cause) { "WAMP Session was closed due to the following exception:" }
+            shutdown()
+            return
+        }
+
+        logger.error(cause) { "WAMP Session encountered the following exception:" }
+    }
+
+    private suspend fun awaitSubscriptionCompletion() {
+        _incoming.subscriptionCount.takeWhile { it > 0 }.collect()
+    }
+
+    private suspend fun shutdown() {
+        awaitSubscriptionCompletion()
+        scope.cancel()
+    }
 
     internal suspend fun hello() {
         socket.send(config.intoHello())
@@ -36,17 +66,17 @@ public class DefaultWampSession(
             )
         )
 
-        val remoteGoodbye = incoming.firstOf<WampMessage.Goodbye>()
+        val remoteGoodbye = withTimeoutOrNull(1000) {
+            incoming.firstOf<WampMessage.Goodbye>()
+        } ?: return
 
         socket.close()
+        shutdown()
 
-        println("socket closed")
-
-        scope.cancel()
-
-        require(remoteGoodbye.reason == WampClose.GoodbyeAndOut) { "didn't get a goodbye and out" }
+        if (remoteGoodbye.reason != WampClose.GoodbyeAndOut) {
+            logger.warn { "Expected a GoodbyeAndOut from peer but received ${remoteGoodbye.reason} instead!" }
+        }
     }
-
 
     // rpc, pubsub, convenience methods
 }
