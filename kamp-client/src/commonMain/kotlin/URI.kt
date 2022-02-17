@@ -29,6 +29,10 @@ public value class URI private constructor(public val value: String) {
          */
         public fun unsafe(value: String): URI = URI(value)
     }
+
+    override fun toString(): String {
+        return value
+    }
 }
 
 internal val String.uri: URI

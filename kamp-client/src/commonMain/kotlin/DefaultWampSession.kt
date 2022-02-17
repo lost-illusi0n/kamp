@@ -90,7 +90,7 @@ public class DefaultWampSession(
     private val Long.id: Id
         get() = Id.from(this)
 
-    override suspend fun call(procedure: URI, args: Arguments, kwArgs: ArgumentsKw): WampCallResponse = coroutineScope {
+    override suspend fun call(procedure: URI, args: Arguments?, argsKw: ArgumentsKw?): WampCallResponse = coroutineScope {
         val requestId = sessionScopeCount.getAndIncrement().id
 
         val call = WampMessage.Call(
@@ -98,7 +98,7 @@ public class DefaultWampSession(
             WampMessage.Call.Options(),
             procedure,
             args,
-            kwArgs
+            argsKw
         )
 
         send(call)

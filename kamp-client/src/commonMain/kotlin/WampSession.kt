@@ -11,13 +11,7 @@ public interface WampSession {
 
     public suspend fun call(
         procedure: URI,
-        args: Arguments = emptyList(),
-        kwArgs: ArgumentsKw = emptyMap(),
+        args: Arguments? = null,
+        argsKw: ArgumentsKw? = null,
     ): WampCallResponse
-}
-
-// i'm not sure if i like this
-public sealed interface CallResponse {
-    public class Success(public val result: WampMessage.Result): CallResponse
-    public class Error(public val error: WampMessage.Error): CallResponse
 }
