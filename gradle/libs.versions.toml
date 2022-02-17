@@ -1,0 +1,13 @@
+[versions]
+kotlin = "1.6.10"
+ktor = "1.6.7"
+
+[libraries]
+kotlinx-atomicfu = { module = "org.jetbrains.kotlinx:atomicfu", version = "0.17.1" }
+kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version = "1.3.2" }
+kotlin-reflection = { module = "org.jetbrains.kotlin:kotlin-reflect", version.ref = "kotlin" }
+ktor-network = { module = "io.ktor:ktor-network", version.ref = "ktor" }
+logging = { module = "io.github.microutils:kotlin-logging", version = "2.1.21" }
+
+[bundles]
+client = ["kotlinx-atomicfu", "kotlinx-serialization-json", "kotlin-reflection", "ktor-network", "logging"]
