@@ -18,7 +18,7 @@ public class DefaultWampSession(
     public val config: SessionConfig,
     coroutineContext: CoroutineContext
 ) : WampSession {
-    public val scope: CoroutineScope =
+    public override val scope: CoroutineScope =
         CoroutineScope(SupervisorJob() + coroutineContext + CoroutineName("wamp-session"))
 
     private var session: Id by Delegates.notNull()
@@ -31,6 +31,7 @@ public class DefaultWampSession(
         socket.incoming
             .catch { error(it) }
             .onEach { _incoming.emit(it) }
+            .buffer(32)
             .launchIn(scope)
     }
 
@@ -59,13 +60,23 @@ public class DefaultWampSession(
         socket.send(message)
     }
 
-    internal suspend fun hello() {
+    internal suspend fun hello() = coroutineScope {
+        val welcomeDeferred = async { incoming.firstOf<WampMessage.Welcome>() }
+
         send(config.intoHello())
-        val welcome = socket.incoming.firstOf<WampMessage.Welcome>()
+
+        val welcome = withTimeoutOrNull(config.messageTimeout) {
+            welcomeDeferred.await()
+        } ?: throw WampMessageTimeoutException(socket.host, config.messageTimeout)
+
         session = welcome.session
     }
 
-    override suspend fun goodbye(message: String) {
+    override suspend fun goodbye(message: String): Unit = coroutineScope {
+        val remoteGoodbyeDeferred = async {
+            incoming.firstOf<WampMessage.Goodbye>()
+        }
+
         socket.send(
             WampMessage.Goodbye(
                 details = WampMessage.Goodbye.Details(message),
@@ -74,8 +85,8 @@ public class DefaultWampSession(
         )
 
         val remoteGoodbye = withTimeoutOrNull(config.messageTimeout) {
-            incoming.firstOf<WampMessage.Goodbye>()
-        } ?: return
+            remoteGoodbyeDeferred.await()
+        } ?: return@coroutineScope
 
         socket.close()
         shutdown()
@@ -101,16 +112,82 @@ public class DefaultWampSession(
             argsKw
         )
 
-        send(call)
-
-        val response = withTimeoutOrNull(config.messageTimeout) {
+        val responseDeferred = async {
             incoming
                 .filterIsInstance<WampCallResponse>()
                 .filter { it.request == requestId }
                 .first()
+        }
+
+        send(call)
+
+        val response = withTimeoutOrNull(config.messageTimeout) {
+            responseDeferred.await()
         } ?: throw WampMessageTimeoutException(socket.host, config.messageTimeout)
 
         response
+    }
+
+    override suspend fun register(
+        procedure: URI
+    ): WampRegisterResponse = coroutineScope {
+        val requestId = sessionScopeCount.getAndIncrement().id
+
+        val register = WampMessage.Register(
+            requestId,
+            WampMessage.Register.Details(),
+            procedure
+        )
+
+        val responseDeferred = async {
+            incoming
+                .filterIsInstance<WampRegisterResponse>()
+                .filter { it.request == requestId }
+                .first()
+        }
+
+        send(register)
+
+        val response = withTimeoutOrNull(config.messageTimeout) {
+            responseDeferred.await()
+        } ?: throw WampMessageTimeoutException(socket.host, config.messageTimeout)
+
+        response
+    }
+
+    override suspend fun unregister(registration: Id): WampUnregisterResponse = coroutineScope {
+        val requestId = sessionScopeCount.getAndIncrement().id
+
+        val unregister = WampMessage.Unregister(
+            requestId,
+            registration
+        )
+
+        val responseDeferred = async {
+            incoming
+                .filterIsInstance<WampUnregisterResponse>()
+                .filter { it.request == requestId }
+                .first()
+        }
+
+        send(unregister)
+
+        val response = withTimeoutOrNull(config.messageTimeout) {
+            responseDeferred.await()
+        } ?: throw WampMessageTimeoutException(socket.host, config.messageTimeout)
+
+        response
+    }
+
+    override suspend fun yield(requestId: Id, arguments: Arguments, argumentsKw: ArgumentsKw) {
+        val yield = WampMessage.Yield(
+            requestId,
+            WampMessage.Yield.Options(),
+            arguments,
+            argumentsKw
+        )
+
+        send(`yield`)
     }
 }
 

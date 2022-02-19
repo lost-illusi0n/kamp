@@ -22,6 +22,7 @@ private val json = Json { ignoreUnknownKeys = true }
 // the reason for a custom serializer is to allow for
 // variable-sized lengths for collections. by default
 // only a int is used however we need more flexibility
+// TODO: this is abysmal
 public actual class DefaultBinarySerializer<T : Any> actual constructor(private val base: KClass<T>) : KSerializer<T> {
     @OptIn(InternalSerializationApi::class)
     override val descriptor: SerialDescriptor = buildClassSerialDescriptor(base.simpleName.toString()) {

@@ -15,7 +15,7 @@ public class SessionConfigBuilder(public val realm: String) {
     /**
      * The amount of time the session should wait when expecting a message response back.
      */
-    public var messageTimeout: Long = 60000
+    public var messageTimeout: Long = 5000
 
     public fun callee() {
         roles += Role.Callee
