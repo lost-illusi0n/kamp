@@ -8,15 +8,15 @@ import net.lostillusion.kamp.client.WampMessageLength
 import net.lostillusion.kamp.client.format.Binary
 import net.lostillusion.kamp.client.format.BinaryDecoder
 
-internal sealed class MaterializedValue<out T> {
+private sealed class MaterializedValue<out T> {
     class Value<T>(val value: T) : MaterializedValue<T>()
     class Error(val exception: Throwable) : MaterializedValue<Nothing>()
 }
 
-internal fun <T> Flow<T>.materialize(): Flow<MaterializedValue<T>> =
+private fun <T> Flow<T>.materialize(): Flow<MaterializedValue<T>> =
     map<T, MaterializedValue<T>> { MaterializedValue.Value(it) }.catch { emit(MaterializedValue.Error(it)) }
 
-internal fun <T> Flow<MaterializedValue<T>>.dematerialize(): Flow<T> =
+private fun <T> Flow<MaterializedValue<T>>.dematerialize(): Flow<T> =
     map {
         when (it) {
             is MaterializedValue.Value -> it.value
@@ -26,7 +26,7 @@ internal fun <T> Flow<MaterializedValue<T>>.dematerialize(): Flow<T> =
         }
     }
 
-internal fun <T> Flow<MaterializedValue<T>>.values(): Flow<T> =
+private fun <T> Flow<MaterializedValue<T>>.values(): Flow<T> =
     filterIsInstance<MaterializedValue.Value<T>>().map { it.value }
 
 private val packetLogger = KotlinLogging.logger { }

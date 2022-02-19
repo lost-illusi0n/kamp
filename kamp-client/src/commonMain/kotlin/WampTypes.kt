@@ -3,6 +3,8 @@ package net.lostillusion.kamp.client
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.serializer
+import kotlinx.serialization.descriptors.PrimitiveKind
+import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
 import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.descriptors.buildClassSerialDescriptor
 import kotlinx.serialization.encoding.Decoder
@@ -12,6 +14,30 @@ import net.lostillusion.kamp.client.format.BinarySize
 import net.lostillusion.kamp.client.format.BinaryStringSerializer
 import kotlin.jvm.JvmInline
 import kotlin.random.Random
+
+@Serializable(with = WampSerializerType.Serializer::class)
+public enum class WampSerializerType(public val raw: Byte) {
+    Json(1),
+    MessagePack(2);
+
+    public companion object {
+        public fun from(raw: Byte): WampSerializerType = when (raw.toInt()) {
+            1 -> Json
+            2 -> MessagePack
+            else -> error("unknown serializer type: $raw")
+        }
+    }
+
+    public object Serializer : KSerializer<WampSerializerType> {
+        override val descriptor: SerialDescriptor = PrimitiveSerialDescriptor("SerializerType", PrimitiveKind.BYTE)
+
+        override fun deserialize(decoder: Decoder): WampSerializerType = from(decoder.decodeByte())
+
+        override fun serialize(encoder: Encoder, value: WampSerializerType) {
+            encoder.encodeByte(value.raw)
+        }
+    }
+}
 
 @Serializable
 @JvmInline
@@ -28,6 +54,41 @@ public value class Id private constructor(public val value: Long) {
         }
     }
 }
+
+@JvmInline
+@Serializable
+public value class URI private constructor(public val value: String) {
+    public companion object {
+        // these two may need to change with an advanced profile implementation
+        private val LOOSE_PATTERN = Regex("^([^\\s\\.#]+\\.)*([^\\s\\.#]+)\$")
+        private val STRICT_PATTERN = Regex("^([0-9a-z_]+\\.)*([0-9a-z_]+)\$")
+
+        public fun loose(value: String): URI? {
+            if(value.startsWith("wamp.") || !LOOSE_PATTERN.matches(value)) return null
+
+            return URI(value)
+        }
+
+        public fun strict(value: String): URI? {
+            if(value.startsWith("wamp.") || !STRICT_PATTERN.matches(value)) return null
+
+            return URI(value)
+        }
+
+        /**
+         * Creates a [URI] from [value] without any checks.
+         * Use this only when using known good values that follow the URI spec.
+         */
+        public fun unsafe(value: String): URI = URI(value)
+    }
+
+    override fun toString(): String {
+        return value
+    }
+}
+
+internal val String.uri: URI
+    get() = URI.unsafe(this)
 
 @Serializable(with = WampMessageLength.Serializer::class)
 @JvmInline

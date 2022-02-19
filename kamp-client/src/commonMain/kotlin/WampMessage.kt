@@ -1,20 +1,19 @@
 package net.lostillusion.kamp.client
 
-import kotlinx.serialization.ExperimentalSerializationApi
-import kotlinx.serialization.InternalSerializationApi
-import kotlinx.serialization.KSerializer
-import kotlinx.serialization.Serializable
+import kotlinx.serialization.*
 import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.descriptors.buildClassSerialDescriptor
 import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
 import kotlinx.serialization.json.*
+import net.lostillusion.kamp.client.format.Binary
+import kotlin.reflect.KClass
 
 // TODO: open up for extension messages
 
 @OptIn(ExperimentalSerializationApi::class)
 @Serializable
-public sealed class WampMessage(public val type: MessageType) {
+public sealed class WampMessage(public val type: WampMessageType) {
     public companion object : KSerializer<WampMessage> {
         override val descriptor: SerialDescriptor = JsonArray.serializer().descriptor
 
@@ -32,11 +31,11 @@ public sealed class WampMessage(public val type: MessageType) {
             val input = decoder as JsonDecoder
             val tree = input.decodeJsonElement()
 
-            val type = MessageType.from(tree.jsonArray[0].jsonPrimitive.int.toByte())
-            val actualSerializer = if (type != MessageType.Error) {
+            val type = WampMessageType.from(tree.jsonArray[0].jsonPrimitive.int.toByte())
+            val actualSerializer = if (type != WampMessageType.Error) {
                 type.messageSerializer
             } else {
-                val call = MessageType.from(tree.jsonArray[1].jsonPrimitive.int.toByte())
+                val call = WampMessageType.from(tree.jsonArray[1].jsonPrimitive.int.toByte())
 
                 call.errorSerializer
             }
@@ -54,26 +53,26 @@ public sealed class WampMessage(public val type: MessageType) {
     }
 
     @Serializable
-    public data class Hello(val realm: String, val details: Details) : WampMessage(MessageType.Hello) {
+    public data class Hello(val realm: String, val details: Details) : WampMessage(WampMessageType.Hello) {
         @Serializable
-        public data class Details(val agent: String? = null, val roles: Map<Role, JsonObject>)
+        public data class Details(val agent: String? = null, val roles: Map<WampRole, JsonObject>)
     }
 
     @Serializable
-    public data class Welcome(val session: Id, val details: Details) : WampMessage(MessageType.Welcome) {
+    public data class Welcome(val session: Id, val details: Details) : WampMessage(WampMessageType.Welcome) {
         @Serializable
-        public data class Details(val agent: String? = null, val roles: Map<Role, JsonObject>)
+        public data class Details(val agent: String? = null, val roles: Map<WampRole, JsonObject>)
     }
 
     @Serializable
 // TODO: make a uri type for reason and other similar fields
-    public data class Abort(val details: Details, val reason: String) : WampMessage(MessageType.Abort) {
+    public data class Abort(val details: Details, val reason: String) : WampMessage(WampMessageType.Abort) {
         @Serializable
         public data class Details(val message: String)
     }
 
     @Serializable
-    public data class Goodbye(val details: Details = Details(), val reason: WampClose) : WampMessage(MessageType.Goodbye) {
+    public data class Goodbye(val details: Details = Details(), val reason: WampClose) : WampMessage(WampMessageType.Goodbye) {
         @Serializable
         public data class Details(val message: String? = null)
     }
@@ -86,7 +85,7 @@ public sealed class WampMessage(public val type: MessageType) {
         // these should not be present in serialized form if null
         val arguments: Arguments? = null,
         val argumentsKw: ArgumentsKw? = null
-    ) : WampMessage(MessageType.Call) {
+    ) : WampMessage(WampMessageType.Call) {
         @Serializable
         public class Options
     }
@@ -97,20 +96,20 @@ public sealed class WampMessage(public val type: MessageType) {
         val details: Details,
         val arguments: Arguments? = null,
         val argumentsKw: ArgumentsKw? = null
-    ) : WampMessage(MessageType.Result), WampCallResponse {
+    ) : WampMessage(WampMessageType.Result), WampCallResponse {
         @Serializable
         public class Details
     }
 
     @Serializable
-    public sealed class Error(public val messageType: MessageType) : WampMessage(MessageType.Error) {
+    public sealed class Error(public val messageType: WampMessageType) : WampMessage(WampMessageType.Error) {
         public object Serializer : KSerializer<Error> {
             override val descriptor: SerialDescriptor = buildClassSerialDescriptor("Error") {
-                element("messageType", MessageType.Serializer.descriptor)
+                element("messageType", WampMessageType.Serializer.descriptor)
             }
 
             override fun deserialize(decoder: Decoder): Error {
-                return decoder.decodeSerializableValue(MessageType.Serializer).errorSerializer.deserialize(decoder)
+                return decoder.decodeSerializableValue(WampMessageType.Serializer).errorSerializer.deserialize(decoder)
             }
 
             override fun serialize(encoder: Encoder, value: Error) {
@@ -126,7 +125,7 @@ public sealed class WampMessage(public val type: MessageType) {
         val error: WampError,
         val args: Arguments? = null,
         val argumentsKw: ArgumentsKw? = null
-    ) : Error(MessageType.Call), WampCallResponse {
+    ) : Error(WampMessageType.Call), WampCallResponse {
         @Serializable
         public class Details
     }
@@ -136,7 +135,7 @@ public sealed class WampMessage(public val type: MessageType) {
         val request: Id,
         val options: Details,
         val procedure: URI
-    ) : WampMessage(MessageType.Register) {
+    ) : WampMessage(WampMessageType.Register) {
         @Serializable
         public class Details
     }
@@ -145,14 +144,14 @@ public sealed class WampMessage(public val type: MessageType) {
     public data class Registered(
         override val request: Id,
         val registration: Id
-    ) : WampMessage(MessageType.Registered), WampRegisterResponse
+    ) : WampMessage(WampMessageType.Registered), WampRegisterResponse
 
     @Serializable
     public data class RegisterError(
         override val request: Id,
         val details: Details,
         val error: WampError
-    ) : Error(MessageType.Register), WampRegisterResponse {
+    ) : Error(WampMessageType.Register), WampRegisterResponse {
         @Serializable
         public class Details()
     }
@@ -164,7 +163,7 @@ public sealed class WampMessage(public val type: MessageType) {
         val details: Details,
         val arguments: Arguments? = null,
         val argumentsKw: ArgumentsKw? = null
-    ) : WampMessage(MessageType.Invocation) {
+    ) : WampMessage(WampMessageType.Invocation) {
         @Serializable
         public class Details
     }
@@ -175,7 +174,7 @@ public sealed class WampMessage(public val type: MessageType) {
         val options: Options,
         val arguments: Arguments,
         val argumentsKw: ArgumentsKw
-    ) : WampMessage(MessageType.Yield) {
+    ) : WampMessage(WampMessageType.Yield) {
         @Serializable
         public class Options
     }
@@ -187,7 +186,7 @@ public sealed class WampMessage(public val type: MessageType) {
         val error: WampError,
         val arguments: Arguments? = null,
         val argumentsKw: ArgumentsKw? = null
-    ) : Error(MessageType.Invocation) {
+    ) : Error(WampMessageType.Invocation) {
         @Serializable
         public class Details
     }
@@ -196,19 +195,19 @@ public sealed class WampMessage(public val type: MessageType) {
     public data class Unregister(
         val request: Id,
         val registration: Id
-    ) : WampMessage(MessageType.Unregister)
+    ) : WampMessage(WampMessageType.Unregister)
 
     @Serializable
     public data class Unregistered(
         override val request: Id
-    ) : WampMessage(MessageType.Unregistered), WampUnregisterResponse
+    ) : WampMessage(WampMessageType.Unregistered), WampUnregisterResponse
 
     @Serializable
     public data class UnregisterError(
         override val request: Id,
         val details: Details,
         val error: WampError
-    ) : Error(MessageType.Unregister), WampUnregisterResponse {
+    ) : Error(WampMessageType.Unregister), WampUnregisterResponse {
         @Serializable
         public class Details
     }
@@ -230,10 +229,16 @@ public typealias ArgumentsKw = Map<String, JsonElement>
 
 public typealias Arguments = List<JsonElement>
 
-internal val MessageType.errorSerializer
+internal val WampMessageType.errorSerializer
     get() = when (this) {
-        MessageType.Call -> WampMessage.CallError.serializer()
-        MessageType.Register -> WampMessage.RegisterError.serializer()
-        MessageType.Invocation -> WampMessage.InvocationError.serializer()
+        WampMessageType.Call -> WampMessage.CallError.serializer()
+        WampMessageType.Register -> WampMessage.RegisterError.serializer()
+        WampMessageType.Invocation -> WampMessage.InvocationError.serializer()
         else -> error("Missing error for message type: $this")
     }
+
+@Suppress("UNCHECKED_CAST")
+@OptIn(ExperimentalSerializationApi::class, InternalSerializationApi::class)
+internal fun <T : Any> T.actualSerializer(klass: KClass<out T>): KSerializer<T> {
+    return (Binary.serializersModule.getPolymorphic(klass as KClass<T>, this) ?: klass.serializerOrNull()) as KSerializer<T>
+}

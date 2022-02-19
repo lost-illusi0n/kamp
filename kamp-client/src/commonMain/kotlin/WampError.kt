@@ -13,12 +13,12 @@ public sealed class WampError(public val reason: URI) {
     public object NoSuchRegistration : WampError("wamp.error.no_such_registration".uri)
     public object NoSuchSubscription : WampError("wamp.error.no_such_subscription".uri)
     public object InvalidArgument : WampError("wamp.error.invalid_argument".uri)
-    public class Unknown(reason: URI) : WampError(reason) {
+    public class Other(reason: URI) : WampError(reason) {
         override fun toString(): String = "WampError(${reason.value})"
     }
 
     public companion object {
-        /***
+        /**
          * An array of the predefined Wamp errors.
          */
         public val values: Array<WampError> = arrayOf(
@@ -31,7 +31,7 @@ public sealed class WampError(public val reason: URI) {
         )
 
         public fun from(reason: URI): WampError {
-            return values.find { it.reason.value.contentEquals(reason.value) } ?: Unknown(reason)
+            return values.find { it.reason.value.contentEquals(reason.value) } ?: Other(reason)
         }
     }
 

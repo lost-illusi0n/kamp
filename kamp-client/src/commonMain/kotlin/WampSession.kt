@@ -1,7 +1,6 @@
 package net.lostillusion.kamp.client
 
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.SharedFlow
 
 public interface WampSession {

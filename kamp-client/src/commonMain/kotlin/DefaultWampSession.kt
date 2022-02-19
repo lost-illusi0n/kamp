@@ -15,7 +15,7 @@ private val logger = KotlinLogging.logger { }
 
 public class DefaultWampSession(
     public val socket: WampTransportSocket,
-    public val config: SessionConfig,
+    public val config: WampSessionConfig,
     coroutineContext: CoroutineContext
 ) : WampSession {
     public override val scope: CoroutineScope =

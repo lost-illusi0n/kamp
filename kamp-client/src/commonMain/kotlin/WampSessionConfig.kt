@@ -2,14 +2,14 @@ package net.lostillusion.kamp.client
 
 import kotlinx.serialization.json.JsonObject
 
-public data class SessionConfig(val agent: String?, val realm: String, val roles: Set<Role>, val messageTimeout: Long)
+public data class WampSessionConfig(val agent: String?, val realm: String, val roles: Set<WampRole>, val messageTimeout: Long)
 
-public class SessionConfigBuilder(public val realm: String) {
+public class WampSessionConfigBuilder(public val realm: String) {
     private companion object {
-        private val DEFAULT_ROLES = setOf(Role.Caller, Role.Callee, Role.Publisher, Role.Subscriber)
+        private val DEFAULT_ROLES = setOf(WampRole.Caller, WampRole.Callee, WampRole.Publisher, WampRole.Subscriber)
     }
 
-    public val roles: MutableSet<Role> = mutableSetOf()
+    public val roles: MutableSet<WampRole> = mutableSetOf()
     public var agent: String? = null
 
     /**
@@ -18,23 +18,23 @@ public class SessionConfigBuilder(public val realm: String) {
     public var messageTimeout: Long = 5000
 
     public fun callee() {
-        roles += Role.Callee
+        roles += WampRole.Callee
     }
 
     public fun caller() {
-        roles += Role.Caller
+        roles += WampRole.Caller
     }
 
     public fun publisher() {
-        roles += Role.Publisher
+        roles += WampRole.Publisher
     }
 
     public fun subscriber() {
-        roles += Role.Subscriber
+        roles += WampRole.Subscriber
     }
 
-    public fun build(): SessionConfig =
-        SessionConfig(
+    public fun build(): WampSessionConfig =
+        WampSessionConfig(
             agent,
             realm,
             roles.ifEmpty { DEFAULT_ROLES },
@@ -42,7 +42,7 @@ public class SessionConfigBuilder(public val realm: String) {
         )
 }
 
-internal fun SessionConfig.intoHello(): WampMessage.Hello = WampMessage.Hello(
+internal fun WampSessionConfig.intoHello(): WampMessage.Hello = WampMessage.Hello(
     realm = realm,
     details = WampMessage.Hello.Details(
         agent = agent,

@@ -4,7 +4,7 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 @Serializable
-public enum class Role {
+public enum class WampRole {
     @SerialName("publisher") Publisher,
     @SerialName("subscriber") Subscriber,
     @SerialName("caller") Caller,

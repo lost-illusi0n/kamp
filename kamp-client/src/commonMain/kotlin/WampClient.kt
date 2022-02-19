@@ -12,7 +12,7 @@ public class WampClient(
     @Throws(WampException::class)
     public suspend fun connect(
         url: NetworkAddress,
-        config: SessionConfig,
+        config: WampSessionConfig,
         coroutineContext: CoroutineContext = EmptyCoroutineContext
     ): DefaultWampSession {
         val socket = socketClient.connect(url, coroutineContext)
@@ -26,6 +26,6 @@ public class WampClient(
         host: NetworkAddress,
         realm: String,
         coroutineContext: CoroutineContext = EmptyCoroutineContext,
-        config: SessionConfigBuilder.() -> Unit = { }
-    ): DefaultWampSession = connect(host, SessionConfigBuilder(realm).apply(config).build(), coroutineContext)
+        config: WampSessionConfigBuilder.() -> Unit = { }
+    ): DefaultWampSession = connect(host, WampSessionConfigBuilder(realm).apply(config).build(), coroutineContext)
 }
