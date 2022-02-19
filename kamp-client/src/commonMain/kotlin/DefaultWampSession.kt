@@ -179,7 +179,7 @@ public class DefaultWampSession(
         response
     }
 
-    override suspend fun yield(requestId: Id, arguments: Arguments, argumentsKw: ArgumentsKw) {
+    private suspend fun internalYield(requestId: Id, arguments: Arguments?, argumentsKw: ArgumentsKw?) {
         val yield = WampMessage.Yield(
             requestId,
             WampMessage.Yield.Options(),
@@ -188,6 +188,112 @@ public class DefaultWampSession(
         )
 
         send(`yield`)
+    }
+
+    override suspend fun yield(requestId: Id) {
+        internalYield(requestId, null, null)
+    }
+
+    override suspend fun yield(requestId: Id, arguments: Arguments) {
+        internalYield(requestId, arguments, null)
+    }
+
+    override suspend fun yield(requestId: Id, argumentsKw: ArgumentsKw) {
+        internalYield(requestId, null, argumentsKw)
+    }
+
+    override suspend fun yield(requestId: Id, arguments: Arguments, argumentsKw: ArgumentsKw) {
+        internalYield(requestId, arguments, argumentsKw)
+    }
+
+    private suspend fun internalPublish(topic: URI, ack: Boolean = false, arguments: Arguments?, argumentsKw: ArgumentsKw?): WampPublishResponse? = coroutineScope {
+        val request = sessionScopeCount.getAndIncrement().id
+
+        val publish = WampMessage.Publish(
+            request,
+            WampMessage.Publish.Options(ack),
+            topic,
+            arguments,
+            argumentsKw
+        )
+
+        return@coroutineScope if (ack) {
+            val publishResponseDeferred = async {
+                incoming
+                    .filterIsInstance<WampPublishResponse>()
+                    .filter { it.request == request }
+                    .first()
+            }
+
+            send(publish)
+
+            val response = withTimeoutOrNull(config.messageTimeout) {
+                publishResponseDeferred.await()
+            } ?: throw WampMessageTimeoutException(socket.host, config.messageTimeout)
+
+            response
+        } else {
+            send(publish)
+            null
+        }
+    }
+
+    override suspend fun publishWithAck(topic: URI): WampPublishResponse = internalPublish(topic, true, null, null)!!
+
+    override suspend fun publishWithAck(topic: URI, arguments: Arguments): WampPublishResponse = internalPublish(topic, true, arguments, null)!!
+
+    override suspend fun publishWithAck(topic: URI, arguments: Arguments, argumentsKw: ArgumentsKw): WampPublishResponse = internalPublish(topic, true, arguments, argumentsKw)!!
+
+    override suspend fun publish(topic: URI) {
+        internalPublish(topic, false, null, null)
+    }
+
+    override suspend fun publish(topic: URI, arguments: Arguments) {
+        internalPublish(topic, false, arguments, null)
+    }
+
+    override suspend fun publish(topic: URI, arguments: Arguments, argumentsKw: ArgumentsKw) {
+        internalPublish(topic, false, null, argumentsKw)
+    }
+
+    override suspend fun subscribe(topic: URI): WampSubscribeResponse = coroutineScope {
+        val request = sessionScopeCount.getAndIncrement().id
+
+        val subscribe = WampMessage.Subscribe(request, WampMessage.Subscribe.Options(), topic)
+
+        val responseDeferred = async {
+            incoming.filterIsInstance<WampSubscribeResponse>()
+                .filter { it.request == request }
+                .first()
+        }
+
+        send(subscribe)
+
+        val response = withTimeoutOrNull(config.messageTimeout) {
+            responseDeferred.await()
+        } ?: throw WampMessageTimeoutException(socket.host, config.messageTimeout)
+
+        response
+    }
+
+    override suspend fun unsubscribe(subscription: Id): WampUnsubscribeResponse = coroutineScope {
+        val request = sessionScopeCount.getAndIncrement().id
+
+        val unsubscribe = WampMessage.Unsubscribe(request, subscription)
+
+        val responseDeferred = async {
+            incoming.filterIsInstance<WampUnsubscribeResponse>()
+                .filter { it.request == request }
+                .first()
+        }
+
+        send(unsubscribe)
+
+        val response = withTimeoutOrNull(config.messageTimeout) {
+            responseDeferred.await()
+        } ?: throw WampMessageTimeoutException(socket.host, config.messageTimeout)
+
+        response
     }
 }
 

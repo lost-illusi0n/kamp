@@ -166,17 +166,25 @@ public sealed class WampMessage(public val type: WampMessageType) {
     ) : WampMessage(WampMessageType.Invocation) {
         @Serializable
         public class Details
+
+        init {
+            if (argumentsKw != null) requireNotNull(arguments)
+        }
     }
 
     @Serializable
     public data class Yield(
         val request: Id,
         val options: Options,
-        val arguments: Arguments,
-        val argumentsKw: ArgumentsKw
+        val arguments: Arguments? = null,
+        val argumentsKw: ArgumentsKw? = null
     ) : WampMessage(WampMessageType.Yield) {
         @Serializable
         public class Options
+
+        init {
+            if (argumentsKw != null) requireNotNull(arguments)
+        }
     }
 
     @Serializable
@@ -189,6 +197,10 @@ public sealed class WampMessage(public val type: WampMessageType) {
     ) : Error(WampMessageType.Invocation) {
         @Serializable
         public class Details
+
+        init {
+            if (argumentsKw != null) requireNotNull(arguments)
+        }
     }
 
     @Serializable
@@ -211,6 +223,97 @@ public sealed class WampMessage(public val type: WampMessageType) {
         @Serializable
         public class Details
     }
+
+    @Serializable
+    public data class Subscribe(
+        val request: Id,
+        val options: Options,
+        val topic: URI
+    ) : WampMessage(WampMessageType.Subscribe) {
+        @Serializable
+        public class Options
+    }
+
+    @Serializable
+    public data class Subscribed(
+        override val request: Id,
+        val subscription: Id
+    ) : WampMessage(WampMessageType.Subscribed), WampSubscribeResponse
+
+    @Serializable
+    public data class SubscribeError(
+        override val request: Id,
+        val details: Details,
+        val error: WampError
+    ) : Error(WampMessageType.Subscribe), WampSubscribeResponse {
+        @Serializable
+        public class Details
+    }
+
+    @Serializable
+    public data class Unsubscribe(
+        val request: Id,
+        val subscription: Id
+    ) : WampMessage(WampMessageType.Unsubscribe)
+
+    @Serializable
+    public data class Unsubscribed(
+        override val request: Id
+    ) : WampMessage(WampMessageType.Unsubscribed), WampUnsubscribeResponse
+
+    @Serializable
+    public data class UnsubscribeError(
+        override val request: Id,
+        val details: Details,
+        val error: WampError
+    ) : Error(WampMessageType.Unsubscribe), WampUnsubscribeResponse {
+        @Serializable
+        public class Details
+    }
+
+    @Serializable
+    public data class Publish(
+        val request: Id,
+        val options: Options,
+        val topic: URI,
+        val arguments: Arguments? = null,
+        val argumentsKw: ArgumentsKw? = null
+    ): WampMessage(WampMessageType.Publish) {
+        @Serializable
+        public class Options(public val acknowledge: Boolean)
+
+        init {
+            if (argumentsKw != null) requireNotNull(arguments)
+        }
+    }
+
+    @Serializable
+    public data class Published(
+        override val request: Id,
+        val publication: Id
+    ): WampMessage(WampMessageType.Published), WampPublishResponse
+
+    @Serializable
+    public data class PublishError(
+        override val request: Id,
+        val details: Details,
+        val error: WampError
+    ): Error(WampMessageType.Publish), WampPublishResponse {
+        @Serializable
+        public class Details
+    }
+
+    @Serializable
+    public data class Event(
+        val subscription: Id,
+        val publication: Id,
+        val details: Details,
+        val arguments: Arguments? = null,
+        val argumentsKw: ArgumentsKw? = null
+    ): WampMessage(WampMessageType.Event) {
+        @Serializable
+        public class Details
+    }
 }
 
 public sealed interface WampCallResponse {
@@ -225,6 +328,18 @@ public sealed interface WampUnregisterResponse {
     public val request: Id
 }
 
+public sealed interface WampSubscribeResponse {
+    public val request: Id
+}
+
+public sealed interface WampUnsubscribeResponse {
+    public val request: Id
+}
+
+public sealed interface WampPublishResponse {
+    public val request: Id
+}
+
 public typealias ArgumentsKw = Map<String, JsonElement>
 
 public typealias Arguments = List<JsonElement>
@@ -234,6 +349,9 @@ internal val WampMessageType.errorSerializer
         WampMessageType.Call -> WampMessage.CallError.serializer()
         WampMessageType.Register -> WampMessage.RegisterError.serializer()
         WampMessageType.Invocation -> WampMessage.InvocationError.serializer()
+        WampMessageType.Subscribe -> WampMessage.SubscribeError.serializer()
+        WampMessageType.Unsubscribe -> WampMessage.UnsubscribeError.serializer()
+        WampMessageType.Publish -> WampMessage.PublishError.serializer()
         else -> error("Missing error for message type: $this")
     }
 

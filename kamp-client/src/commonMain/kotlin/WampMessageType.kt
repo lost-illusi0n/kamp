@@ -17,6 +17,15 @@ public enum class WampMessageType(public val raw: Byte) {
     Goodbye(6),
     Error(8),
 
+    // pub-sub
+    Publish(16),
+    Published(17),
+    Subscribe(32),
+    Subscribed(33),
+    Unsubscribe(34),
+    Unsubscribed(35),
+    Event(36),
+
     // RPC
     Call(48),
     Result(50),
@@ -49,6 +58,13 @@ public val WampMessageType.messageSerializer: KSerializer<out WampMessage>
         WampMessageType.Abort -> WampMessage.Abort.serializer()
         WampMessageType.Goodbye -> WampMessage.Goodbye.serializer()
         WampMessageType.Error -> WampMessage.Error.Serializer
+        WampMessageType.Publish -> WampMessage.Publish.serializer()
+        WampMessageType.Published -> WampMessage.Published.serializer()
+        WampMessageType.Subscribe -> WampMessage.Subscribe.serializer()
+        WampMessageType.Subscribed -> WampMessage.Subscribed.serializer()
+        WampMessageType.Unsubscribe -> WampMessage.Unsubscribe.serializer()
+        WampMessageType.Unsubscribed -> WampMessage.Unsubscribed.serializer()
+        WampMessageType.Event -> WampMessage.Event.serializer()
         WampMessageType.Call -> WampMessage.Call.serializer()
         WampMessageType.Result -> WampMessage.Result.serializer()
         WampMessageType.Register -> WampMessage.Register.serializer()
